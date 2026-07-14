@@ -1,0 +1,49 @@
+# Automatische Synchronisation mit dem iOS-Repo (noahhwagnerr-wq/Dictionary-).
+#
+# Laeuft stuendlich (und manuell ueber "Run workflow" im Actions-Tab). Holt den
+# aktuellen Stand des iOS-Repos, wendet die Android-spezifischen Anpassungen an
+# (siehe .github/scripts/sync_from_ios.py) und committet nur, wenn sich etwas
+# geaendert hat. Es werden keine Secrets benoetigt: das iOS-Repo ist oeffentlich
+# und der Push in dieses Repo nutzt den eingebauten GITHUB_TOKEN.
+#
+# Hinweis: Zeitplan-Trigger laufen nur auf dem Default-Branch (main).
+
+name: Sync von iOS-Repo (Dictionary)
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-from-ios
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Android-Repo auschecken
+        uses: actions/checkout@v4
+
+      - name: iOS-Repo klonen
+        run: git clone --depth 1 https://github.com/noahhwagnerr-wq/Dictionary-.git /tmp/ios-repo
+
+      - name: Dateien synchronisieren und Android-Anpassungen anwenden
+        run: python3 .github/scripts/sync_from_ios.py /tmp/ios-repo .
+
+      - name: Aenderungen committen und pushen
+        run: |
+          if git diff --quiet; then
+            echo "Keine Aenderungen - Android ist bereits auf dem Stand des iOS-Repos."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          IOS_SHA=$(git -C /tmp/ios-repo rev-parse --short HEAD)
+          git add index.html sw.js reset.html
+          git commit -m "Sync mit iOS-Repo (Dictionary- @ ${IOS_SHA})"
+          git push
